@@ -1,9 +1,10 @@
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import '../models/menu.dart';
-import '../utils/localization.dart';
 import '../utils/app_logger.dart';
 
 class NotificationService {
@@ -11,156 +12,210 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin notifications =
+  final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+  
+  bool _isInitialized = false;
 
+  /// Notification service'i başlat
   Future<void> initialize() async {
-    tz.initializeTimeZones();
+    if (_isInitialized) {
+      AppLogger.notification('NotificationService already initialized');
+      return;
+    }
 
+    // Timezone'ları başlat ve Türkiye saat dilimini ayarla
+    tz.initializeTimeZones();
+    tz.setLocalLocation(tz.getLocation('Europe/Istanbul'));
+    AppLogger.notification('Timezone set to Europe/Istanbul');
+
+    // Android ayarları
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings();
+    
+    // iOS ayarları
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
     
     const initializationSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
 
-    await notifications.initialize(initializationSettings);
+    // Bildirimleri başlat
+    final initialized = await _notifications.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: _onNotificationTapped,
+    );
+    
+    AppLogger.notification('Notifications initialized: $initialized');
+
+    // Android için notification channel oluştur
+    if (Platform.isAndroid) {
+      await _createNotificationChannel();
+    }
+    
+    _isInitialized = true;
+    AppLogger.notification('NotificationService initialization complete');
   }
 
+  /// Notification channel oluştur (Android 8+)
+  Future<void> _createNotificationChannel() async {
+    const channel = AndroidNotificationChannel(
+      'meal_notifications',
+      'Yemek Bildirimleri',
+      description: 'Günlük yemek menüsü bildirimleri',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+      enableLights: true,
+    );
+
+    await _notifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+    
+    AppLogger.notification('Notification channel created: ${channel.id}');
+  }
+
+  /// Bildirime tıklandığında
+  void _onNotificationTapped(NotificationResponse response) {
+    AppLogger.notification('Notification tapped: ${response.payload}');
+    // Burada navigasyon yapılabilir
+  }
+
+  /// Günlük yemek bildirimlerini zamanla
   Future<void> scheduleDailyMealNotifications(List<Menu> menus) async {
+    if (!_isInitialized) {
+      AppLogger.warning('NotificationService not initialized, initializing now...');
+      await initialize();
+    }
+
     if (menus.isEmpty) {
       AppLogger.notification('Menu list empty, cannot schedule notifications');
       return;
     }
 
-    // Clear existing notifications
-    await notifications.cancelAll();
+    // Önce eski bildirimleri temizle
+    await cancelAllNotifications();
 
-    // Get today's date
-    final today = DateTime.now();
-    final todayString = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    // Bugünün tarihini al
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
-    // Filter today's menus
+    // Bugünün menülerini filtrele
     var todayMenus = menus.where((menu) {
-      final menuDate = '${menu.date.year}-${menu.date.month.toString().padLeft(2, '0')}-${menu.date.day.toString().padLeft(2, '0')}';
-      return menuDate == todayString;
+      final menuDate = DateTime(menu.date.year, menu.date.month, menu.date.day);
+      return menuDate.isAtSameMomentAs(today);
     }).toList();
 
-    // If no menu for today, find nearest date
+    // Bugün menü yoksa, en yakın tarihi bul
     if (todayMenus.isEmpty) {
-      AppLogger.notification('No menu for today, searching for nearest date...');
+      AppLogger.notification('No menu for today, searching nearest date...');
       
       final futureMenus = menus.where((menu) => menu.date.isAfter(today)).toList();
       
       if (futureMenus.isNotEmpty) {
-        final nearestDate = futureMenus.map((m) => m.date).reduce((a, b) => a.isBefore(b) ? a : b);
-        todayMenus = futureMenus.where((menu) => 
-          menu.date.year == nearestDate.year && 
-          menu.date.month == nearestDate.month && 
-          menu.date.day == nearestDate.day
-        ).toList();
+        futureMenus.sort((a, b) => a.date.compareTo(b.date));
+        final nearestDate = DateTime(futureMenus.first.date.year, 
+                                     futureMenus.first.date.month, 
+                                     futureMenus.first.date.day);
+        todayMenus = futureMenus.where((menu) {
+          final menuDate = DateTime(menu.date.year, menu.date.month, menu.date.day);
+          return menuDate.isAtSameMomentAs(nearestDate);
+        }).toList();
         
-        AppLogger.notification('Found nearest menu date: ${nearestDate.toString().split(' ')[0]}');
-      } else {
-        final pastMenus = menus.where((menu) => menu.date.isBefore(today)).toList();
-        if (pastMenus.isNotEmpty) {
-          final latestDate = pastMenus.map((m) => m.date).reduce((a, b) => a.isAfter(b) ? a : b);
-          todayMenus = pastMenus.where((menu) => 
-            menu.date.year == latestDate.year && 
-            menu.date.month == latestDate.month && 
-            menu.date.day == latestDate.day
-          ).toList();
-          AppLogger.notification('Using past menu for test: ${latestDate.toString().split(' ')[0]}');
-        }
+        AppLogger.notification('Using future menu date: $nearestDate');
       }
     }
 
     if (todayMenus.isEmpty) {
-      AppLogger.notification('No menu found, cannot schedule notifications');
+      AppLogger.notification('No menu found for notifications');
       return;
     }
 
-    // Find breakfast menu
+    // Kahvaltı menüsünü bul
     final breakfastMenu = todayMenus.firstWhere(
       (menu) => menu.mealType == 'Kahvaltı',
-      orElse: () => Menu(
-        id: 0,
-        cityId: 0,
-        mealType: 'Kahvaltı',
-        date: today,
-        energy: '',
-        items: [],
-      ),
+      orElse: () => Menu(id: 0, cityId: 0, mealType: 'Kahvaltı', date: today, energy: '', items: []),
     );
 
-    // Find dinner menu
+    // Akşam yemeği menüsünü bul
     final dinnerMenu = todayMenus.firstWhere(
       (menu) => menu.mealType == 'Akşam Yemeği',
-      orElse: () => Menu(
-        id: 0,
-        cityId: 0,
-        mealType: 'Akşam Yemeği',
-        date: today,
-        energy: '',
-        items: [],
-      ),
+      orElse: () => Menu(id: 0, cityId: 0, mealType: 'Akşam Yemeği', date: today, energy: '', items: []),
     );
 
-    AppLogger.notification('Breakfast menu found: ${breakfastMenu.items.length} items');
-    AppLogger.notification('Dinner menu found: ${dinnerMenu.items.length} items');
+    AppLogger.notification('Breakfast items: ${breakfastMenu.items.length}, Dinner items: ${dinnerMenu.items.length}');
 
-    // Breakfast notifications
-    await _scheduleNotification(
-      id: 1,
-      title: 'Kahvaltı Başladı! 🍳',
-      body: 'Bugünün kahvaltı menüsü:\n${_getMenuSummary(breakfastMenu)}',
-      scheduledTime: _getTodayAt(7, 0),
-    );
+    // Kahvaltı bildirimleri
+    if (breakfastMenu.items.isNotEmpty) {
+      await _scheduleNotification(
+        id: 1,
+        title: 'Kahvaltı Başladı! 🍳',
+        body: 'Bugünün kahvaltı menüsü:\n${_getMenuSummary(breakfastMenu)}',
+        hour: 7,
+        minute: 0,
+      );
 
-    await _scheduleNotification(
-      id: 2,
-      title: 'Kahvaltı Bitmek Üzere! ⏰',
-      body: 'Kahvaltı menüsü:\n${_getMenuSummary(breakfastMenu)}\n\nHemen yemekhaneye gidin!',
-      scheduledTime: _getTodayAt(11, 15),
-    );
+      await _scheduleNotification(
+        id: 2,
+        title: 'Kahvaltı Bitmek Üzere! ⏰',
+        body: 'Acele edin! Kahvaltı 12:00\'da kapanıyor.\n${_getMenuSummary(breakfastMenu)}',
+        hour: 11,
+        minute: 30,
+      );
+    }
 
-    // Dinner notifications
-    await _scheduleNotification(
-      id: 3,
-      title: 'Akşam Yemeği Başladı! 🍽️',
-      body: 'Bugünün akşam yemeği menüsü:\n${_getMenuSummary(dinnerMenu)}',
-      scheduledTime: _getTodayAt(16, 00),
-    );
+    // Akşam yemeği bildirimleri
+    if (dinnerMenu.items.isNotEmpty) {
+      await _scheduleNotification(
+        id: 3,
+        title: 'Akşam Yemeği Başladı! 🍽️',
+        body: 'Bugünün akşam menüsü:\n${_getMenuSummary(dinnerMenu)}',
+        hour: 16,
+        minute: 0,
+      );
 
-    await _scheduleNotification(
-      id: 4,
-      title: 'Akşam Yemeği Bitmek Üzere! ⏰',
-      body: 'Akşam yemeği menüsü:\n${_getMenuSummary(dinnerMenu)}\n\nHemen yemekhaneye gidin!',
-      scheduledTime: _getTodayAt(22, 15),
-    );
+      await _scheduleNotification(
+        id: 4,
+        title: 'Akşam Yemeği Bitmek Üzere! ⏰',
+        body: 'Acele edin! Yemek 22:00\'da kapanıyor.\n${_getMenuSummary(dinnerMenu)}',
+        hour: 21,
+        minute: 30,
+      );
+    }
 
-    AppLogger.notification('Daily meal notifications scheduled');
+    // Bekleyen bildirimleri kontrol et
+    final pending = await getPendingNotifications();
+    AppLogger.notification('Scheduled ${pending.length} notifications');
   }
 
+  /// Tek bir bildirimi zamanla
   Future<void> _scheduleNotification({
     required int id,
     required String title,
     required String body,
-    required DateTime scheduledTime,
+    required int hour,
+    required int minute,
   }) async {
-    DateTime targetTime = scheduledTime;
-    if (targetTime.isBefore(DateTime.now())) {
-      targetTime = targetTime.add(const Duration(days: 1));
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    
+    // Eğer zaman geçmişse, yarına planla
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
 
     try {
-      await notifications.zonedSchedule(
+      await _notifications.zonedSchedule(
         id,
         title,
         body,
-        tz.TZDateTime.from(targetTime, tz.local),
-        const NotificationDetails(
+        scheduledDate,
+        NotificationDetails(
           android: AndroidNotificationDetails(
             'meal_notifications',
             'Yemek Bildirimleri',
@@ -171,30 +226,32 @@ class NotificationService {
             enableLights: true,
             enableVibration: true,
             playSound: true,
+            styleInformation: BigTextStyleInformation(body),
           ),
-          iOS: DarwinNotificationDetails(
+          iOS: const DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: true,
             presentSound: true,
           ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time, // Her gün aynı saatte tekrarla
       );
       
-      AppLogger.notification('Notification scheduled: $title - ${targetTime.toString()}');
+      AppLogger.notification('Scheduled: "$title" at ${scheduledDate.toString()}');
     } catch (e) {
-      AppLogger.error('Error scheduling notification', e);
+      AppLogger.error('Error scheduling notification $id', e);
+      
+      // Exact alarm izni yoksa inexact dene
       if (e.toString().contains('exact_alarms_not_permitted')) {
-        AppLogger.notification('No exact alarm permission, using inexact mode...');
         try {
-          await notifications.zonedSchedule(
+          await _notifications.zonedSchedule(
             id,
             title,
             body,
-            tz.TZDateTime.from(targetTime, tz.local),
-            const NotificationDetails(
+            scheduledDate,
+            NotificationDetails(
               android: AndroidNotificationDetails(
                 'meal_notifications',
                 'Yemek Bildirimleri',
@@ -202,55 +259,55 @@ class NotificationService {
                 importance: Importance.high,
                 priority: Priority.high,
                 icon: '@mipmap/ic_launcher',
-                enableLights: true,
-                enableVibration: true,
-                playSound: true,
+                styleInformation: BigTextStyleInformation(body),
               ),
-              iOS: DarwinNotificationDetails(
+              iOS: const DarwinNotificationDetails(
                 presentAlert: true,
                 presentBadge: true,
                 presentSound: true,
               ),
             ),
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-            uiLocalNotificationDateInterpretation:
-                UILocalNotificationDateInterpretation.absoluteTime,
+            uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+            matchDateTimeComponents: DateTimeComponents.time,
           );
-          AppLogger.notification('Inexact notification scheduled: $title');
+          AppLogger.notification('Scheduled (inexact): "$title"');
         } catch (e2) {
-          AppLogger.error('Inexact notification also failed', e2);
+          AppLogger.error('Inexact scheduling also failed', e2);
         }
       }
     }
   }
 
-  DateTime _getTodayAt(int hour, int minute) {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day, hour, minute);
-  }
-
+  /// Menü özetini al
   String _getMenuSummary(Menu menu) {
     if (menu.items.isEmpty) return 'Menü henüz açıklanmadı';
     
-    final mainItems = menu.items.take(5).map((item) => item.name).toList();
-    
-    if (mainItems.length <= 3) {
-      return mainItems.join(', ');
-    } else {
-      return '${mainItems.take(3).join(', ')} ve ${mainItems.length - 3} yemek daha';
+    final items = menu.items.take(4).map((item) => '• ${item.name}').toList();
+    if (menu.items.length > 4) {
+      items.add('... ve ${menu.items.length - 4} yemek daha');
     }
+    return items.join('\n');
   }
 
+  /// Tüm bildirimleri iptal et
   Future<void> cancelAllNotifications() async {
-    await notifications.cancelAll();
+    await _notifications.cancelAll();
     AppLogger.notification('All notifications cancelled');
   }
 
+  /// Bekleyen bildirimleri al
+  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
+    return await _notifications.pendingNotificationRequests();
+  }
+
+  /// Bildirimlerin açık olup olmadığını kontrol et
   Future<bool> areNotificationsEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('notifications_enabled') ?? true;
   }
 
+  /// Bildirimleri aç/kapat
   Future<void> setNotificationsEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notifications_enabled', enabled);
@@ -258,15 +315,20 @@ class NotificationService {
     if (!enabled) {
       await cancelAllNotifications();
     }
-    AppLogger.notification('Notifications ${enabled ? 'enabled' : 'disabled'}');
+    AppLogger.notification('Notifications ${enabled ? "enabled" : "disabled"}');
   }
 
+  /// Test bildirimi gönder
   Future<void> sendTestNotification() async {
-    await notifications.show(
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    await _notifications.show(
       999,
-      'Test Bildirimi',
-      'Yemek bildirimleri çalışıyor!',
-      const NotificationDetails(
+      'Test Bildirimi ✅',
+      'Bildirim sistemi çalışıyor!',
+      NotificationDetails(
         android: AndroidNotificationDetails(
           'meal_notifications',
           'Yemek Bildirimleri',
@@ -275,22 +337,13 @@ class NotificationService {
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
         ),
-        iOS: DarwinNotificationDetails(),
+        iOS: const DarwinNotificationDetails(),
       ),
     );
+    AppLogger.notification('Test notification sent');
   }
 
-  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
-    try {
-      final pendingNotifications = await notifications.pendingNotificationRequests();
-      AppLogger.notification('Pending notifications count: ${pendingNotifications.length}');
-      return pendingNotifications;
-    } catch (e) {
-      AppLogger.error('Error getting pending notifications', e);
-      return [];
-    }
-  }
-
+  /// Bildirimleri yeniden zamanla
   Future<void> rescheduleNotifications(List<Menu> menus) async {
     await cancelAllNotifications();
     await scheduleDailyMealNotifications(menus);
