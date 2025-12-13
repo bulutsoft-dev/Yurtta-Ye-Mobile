@@ -39,12 +39,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoadingCoin = true;
   DateTime? _bannerBlockUntil;
   DateTime? _interstitialBlockUntil;
+  DateTime? _appOpenBlockUntil;
   int _adsWatched = 0;
   Timer? _timer;
 
   static const int coinsRequired = 4; // 4 coin = 1 gün reklamsız
   static const int bannerBlockCost = 2;
   static const int interstitialBlockCost = 4;
+  static const int appOpenBlockCost = 1; // 1 coin = 1 gün App Open engelle
 
   @override
   void initState() {
@@ -87,6 +89,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _bannerBlockUntil = bannerMillis != null ? DateTime.fromMillisecondsSinceEpoch(bannerMillis) : null;
       final interstitialMillis = prefs.getInt('interstitialAdBlockUntil');
       _interstitialBlockUntil = interstitialMillis != null ? DateTime.fromMillisecondsSinceEpoch(interstitialMillis) : null;
+      final appOpenMillis = prefs.getInt('appOpenAdBlockUntil');
+      _appOpenBlockUntil = appOpenMillis != null ? DateTime.fromMillisecondsSinceEpoch(appOpenMillis) : null;
       _adsWatched = prefs.getInt('adsWatched') ?? 0;
       _isLoadingCoin = false;
     });
@@ -159,6 +163,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool get _isBannerBlocked => _bannerBlockUntil != null && _bannerBlockUntil!.isAfter(DateTime.now());
   bool get _isInterstitialBlocked => _interstitialBlockUntil != null && _interstitialBlockUntil!.isAfter(DateTime.now());
+  bool get _isAppOpenBlocked => _appOpenBlockUntil != null && _appOpenBlockUntil!.isAfter(DateTime.now());
 
   String get _bannerBlockTimeLeft {
     if (!_isBannerBlocked) return '';
@@ -169,6 +174,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String get _interstitialBlockTimeLeft {
     if (!_isInterstitialBlocked) return '';
     final diff = _interstitialBlockUntil!.difference(DateTime.now());
+    return _formatDuration(diff);
+  }
+
+  String get _appOpenBlockTimeLeft {
+    if (!_isAppOpenBlocked) return '';
+    final diff = _appOpenBlockUntil!.difference(DateTime.now());
     return _formatDuration(diff);
   }
 
@@ -192,10 +203,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _adFreeUntil = null;
       _bannerBlockUntil = null;
       _interstitialBlockUntil = null;
+      _appOpenBlockUntil = null;
     });
     await prefs.remove('adFreeUntil');
     await prefs.remove('bannerAdBlockUntil');
     await prefs.remove('interstitialAdBlockUntil');
+    await prefs.remove('appOpenAdBlockUntil');
+  }
+
+  Future<void> _blockAppOpenAds() async {
+    if (_coins < appOpenBlockCost) return;
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final current = _appOpenBlockUntil != null && _appOpenBlockUntil!.isAfter(now) ? _appOpenBlockUntil! : now;
+    final newUntil = current.add(const Duration(days: 1));
+    setState(() {
+      _coins -= appOpenBlockCost;
+      _appOpenBlockUntil = newUntil;
+    });
+    await prefs.setInt('coins', _coins);
+    await prefs.setInt('appOpenAdBlockUntil', newUntil.millisecondsSinceEpoch);
   }
 
   @override
@@ -463,6 +490,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(Localization.getText('ad_info_block_interstitial_success', languageCode)),
+                            backgroundColor: Constants.kykSuccess,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  const Divider(height: 1),
+                  // --- Açılış Reklamı Engelle ---
+                  _buildSettingsItem(
+                    context: context,
+                    isDark: isDark,
+                    icon: Icons.fullscreen_exit_rounded,
+                    title: Localization.getText('ad_info_block_app_open', languageCode),
+                    subtitle: Localization.getText('ad_info_block_app_open_desc', languageCode) + ' ' + (_appOpenBlockTimeLeft.isNotEmpty ? _appOpenBlockTimeLeft : Localization.getText('ad_info_none', languageCode)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.monetization_on_rounded, color: _coins >= appOpenBlockCost ? Constants.kykPrimary : Constants.kykGray400, size: 18),
+                        const SizedBox(width: 4),
+                        Text('$appOpenBlockCost', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: _coins >= appOpenBlockCost ? Constants.kykPrimary : Constants.kykGray400)),
+                      ],
+                    ),
+                    onTap: _isLoadingCoin || _coins < appOpenBlockCost || _isAppOpenBlocked ? null : () async {
+                      await _blockAppOpenAds();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(Localization.getText('ad_info_block_app_open_success', languageCode)),
                             backgroundColor: Constants.kykSuccess,
                           ),
                         );

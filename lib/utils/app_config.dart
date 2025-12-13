@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   // App Information
   static const String appName = 'YurttaYe';
-  static const String appVersion = '1.3.2';
-  static const String appBuildNumber = '20';
+  static const String appVersion = '1.4.0';
+  static const String appBuildNumber = '28';
   
   // Website URLs
   static const String websiteUrl = 'https://yurttaye.onrender.com/';

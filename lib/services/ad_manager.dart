@@ -5,8 +5,10 @@ import 'package:yurttaye_mobile/utils/app_logger.dart';
 class AdManager {
   static const String _lastAdShownKey = 'last_ad_shown';
   static const String _adShownCountKey = 'ad_shown_count';
-  static const int _minAdIntervalMinutes = 3; // Minimum 3 minutes between ads
-  static const int _maxAdsPerSession = 5; // Maximum 5 ads per day
+  static const String _menuDetailClickKey = 'menu_detail_click_count';
+  static const int _minAdIntervalMinutes = 2; // Minimum 2 minutes between ads
+  static const int _maxAdsPerSession = 8; // Maximum 8 ads per day
+  static const int _menuDetailAdInterval = 2; // Her 2 tıklamada bir reklam
 
   static Future<bool> shouldShowAd() async {
     try {
@@ -62,6 +64,38 @@ class AdManager {
     }
   }
 
+  /// Menü detayına tıklamayı kaydet ve reklam gösterilmeli mi kontrol et
+  static Future<bool> shouldShowAdOnMenuDetail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Tıklama sayısını al ve artır
+      final clickCount = (prefs.getInt(_menuDetailClickKey) ?? 0) + 1;
+      await prefs.setInt(_menuDetailClickKey, clickCount);
+      
+      // Her _menuDetailAdInterval tıklamada bir reklam göster
+      final shouldShow = clickCount % _menuDetailAdInterval == 0;
+      
+      AppLogger.ad('Menu detail click: $clickCount, Show ad: $shouldShow');
+      
+      return shouldShow && await shouldShowAd();
+    } catch (e) {
+      AppLogger.error('AdManager shouldShowAdOnMenuDetail error', e);
+      return false;
+    }
+  }
+
+  /// Menü detay tıklama sayısını sıfırla
+  static Future<void> resetMenuDetailClickCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_menuDetailClickKey);
+      AppLogger.ad('Menu detail click count reset');
+    } catch (e) {
+      AppLogger.error('AdManager resetMenuDetailClickCount error', e);
+    }
+  }
+
   static Future<void> resetDailyCount() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -79,12 +113,15 @@ class AdManager {
       final today = DateTime.now().day;
       final adShownCount = prefs.getInt('${_adShownCountKey}_$today') ?? 0;
       final lastAdShown = prefs.getInt(_lastAdShownKey) ?? 0;
+      final menuDetailClicks = prefs.getInt(_menuDetailClickKey) ?? 0;
       
       return {
         'todayCount': adShownCount,
         'maxPerSession': _maxAdsPerSession,
         'lastAdShown': lastAdShown,
         'minIntervalMinutes': _minAdIntervalMinutes,
+        'menuDetailClicks': menuDetailClicks,
+        'menuDetailAdInterval': _menuDetailAdInterval,
       };
     } catch (e) {
       AppLogger.error('AdManager getAdStats error', e);

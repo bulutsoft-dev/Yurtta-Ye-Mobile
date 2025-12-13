@@ -42,7 +42,16 @@ class _AdWrapperState extends State<AdWrapper> {
     Future.delayed(const Duration(milliseconds: 500), () async {
       if (mounted) {
         print('Showing ad for route: ${widget.routeName}');
-        await AdManager.showAdIfAllowed();
+        
+        // Menü detay sayfası için özel kontrol (her 2 tıklamada bir)
+        if (widget.routeName == 'menu_detail') {
+          final shouldShow = await AdManager.shouldShowAdOnMenuDetail();
+          if (shouldShow) {
+            await AdManager.showAdIfAllowed();
+          }
+        } else {
+          await AdManager.showAdIfAllowed();
+        }
       } else {
         print('Widget not mounted, skipping ad');
       }
