@@ -57,7 +57,7 @@ class MenuProvider with ChangeNotifier {
       _isLoading = true;
       _error = null;
       notifyListeners();
-      _cities = await _apiService.getCities().timeout(const Duration(seconds: 10));
+      _cities = await _apiService.getCities().timeout(const Duration(seconds: 30));
       AppLogger.info('Cities fetched: ${_cities.length} items');
       await prefs.setString('cities', jsonEncode(_cities.map((c) => c.toJson()).toList()));
     } catch (e) {
@@ -106,7 +106,7 @@ class MenuProvider with ChangeNotifier {
       notifyListeners();
 
       // Fetch all menus for HomeScreen (unfiltered)
-      final allMenus = await _apiService.getMenus().timeout(const Duration(seconds: 10));
+      final allMenus = await _apiService.getMenus().timeout(const Duration(seconds: 30));
       AppLogger.info('All menus fetched: ${allMenus.length} items');
       
       // Remove duplicates based on menu ID

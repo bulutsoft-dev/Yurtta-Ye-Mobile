@@ -29,6 +29,9 @@ Future<void> main() async {
   // Google Mobile Ads'i başlat
   await AdService.initialize();
   
+  // Interstitial reklamı önceden yükle
+  await AdService.loadInterstitialAd();
+  
   // Günlük reklam sayacını kontrol et ve gerekirse sıfırla
   await AdManager.resetDailyCount();
   

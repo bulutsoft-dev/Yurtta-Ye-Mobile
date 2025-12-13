@@ -26,6 +26,7 @@ import 'package:yurttaye_mobile/widgets/upcoming_meal_card.dart';
 import 'package:yurttaye_mobile/widgets/meal_schedule_card.dart';
 import 'package:yurttaye_mobile/utils/localization.dart';
 import 'package:yurttaye_mobile/services/ad_service.dart';
+import 'package:yurttaye_mobile/services/ad_manager.dart';
 import 'package:yurttaye_mobile/widgets/banner_ad_widget.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -91,10 +92,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _onMealTypeChanged(int index) {
+  void _onMealTypeChanged(int index) async {
     HapticFeedback.lightImpact();
     final provider = Provider.of<MenuProvider>(context, listen: false);
     provider.setSelectedMealIndex(index);
+    
+    // 3. tıklamadan itibaren reklam göster
+    if (await AdManager.shouldShowAdOnMealSwitch()) {
+      await AdService.showInterstitialAd();
+      await AdManager.recordAdShown();
+    }
     
     if (mounted) {
       setState(() {

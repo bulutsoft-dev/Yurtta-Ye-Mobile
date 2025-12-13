@@ -6,9 +6,11 @@ class AdManager {
   static const String _lastAdShownKey = 'last_ad_shown';
   static const String _adShownCountKey = 'ad_shown_count';
   static const String _menuDetailClickKey = 'menu_detail_click_count';
+  static const String _mealSwitchClickKey = 'meal_switch_click_count';
   static const int _minAdIntervalMinutes = 2; // Minimum 2 minutes between ads
   static const int _maxAdsPerSession = 8; // Maximum 8 ads per day
   static const int _menuDetailAdInterval = 2; // Her 2 tıklamada bir reklam
+  static const int _mealSwitchAdThreshold = 3; // 3. tıklamadan itibaren reklam
 
   static Future<bool> shouldShowAd() async {
     try {
@@ -93,6 +95,45 @@ class AdManager {
       AppLogger.ad('Menu detail click count reset');
     } catch (e) {
       AppLogger.error('AdManager resetMenuDetailClickCount error', e);
+    }
+  }
+
+  /// Öğün değişikliğinde tıklamayı kaydet ve reklam gösterilmeli mi kontrol et
+  /// İlk 2 tıklama free, 3. tıklamadan itibaren reklam göster
+  static Future<bool> shouldShowAdOnMealSwitch() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Günlük key oluştur (her gün sıfırlansın)
+      final today = DateTime.now();
+      final todayKey = '${_mealSwitchClickKey}_${today.year}_${today.month}_${today.day}';
+      
+      // Tıklama sayısını al ve artır
+      final clickCount = (prefs.getInt(todayKey) ?? 0) + 1;
+      await prefs.setInt(todayKey, clickCount);
+      
+      // 3. tıklamadan itibaren reklam göster
+      final shouldShow = clickCount >= _mealSwitchAdThreshold;
+      
+      AppLogger.ad('Meal switch click: $clickCount (today), Show ad: $shouldShow');
+      
+      return shouldShow && await shouldShowAd();
+    } catch (e) {
+      AppLogger.error('AdManager shouldShowAdOnMealSwitch error', e);
+      return false;
+    }
+  }
+
+  /// Öğün değişikliği tıklama sayısını sıfırla
+  static Future<void> resetMealSwitchClickCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final today = DateTime.now();
+      final todayKey = '${_mealSwitchClickKey}_${today.year}_${today.month}_${today.day}';
+      await prefs.remove(todayKey);
+      AppLogger.ad('Meal switch click count reset');
+    } catch (e) {
+      AppLogger.error('AdManager resetMealSwitchClickCount error', e);
     }
   }
 
