@@ -91,7 +91,7 @@ class MealScheduleCard extends StatelessWidget {
                   icon: Icons.dinner_dining,
                   title: Localization.getText('dinner', languageCode),
                   startTime: '16:00',
-                  endTime: '23:00',
+                  endTime: '22:00',
                   mealType: Constants.dinnerType,
                 ),
               ),

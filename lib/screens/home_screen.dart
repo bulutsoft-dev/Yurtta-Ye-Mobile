@@ -10,6 +10,7 @@ import 'package:yurttaye_mobile/providers/theme_provider.dart';
 import 'package:yurttaye_mobile/themes/app_theme.dart';
 import 'package:yurttaye_mobile/utils/app_config.dart';
 import 'package:yurttaye_mobile/utils/constants.dart';
+import 'package:yurttaye_mobile/utils/app_logger.dart';
 import 'package:yurttaye_mobile/widgets/error_widget.dart';
 import 'package:yurttaye_mobile/widgets/meal_card.dart';
 import 'package:yurttaye_mobile/widgets/shimmer_loading.dart';
@@ -70,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final provider = Provider.of<MenuProvider>(context, listen: false);
         provider.fetchCities();
         provider.fetchMenus(reset: true, initialLoad: true);
-        print('Initiating fetchMenus from HomeScreen initState');
+        AppLogger.debug('Initiating fetchMenus from HomeScreen initState');
       }
     });
   }
@@ -349,7 +350,7 @@ ${Localization.getCurrentText('email_thanks', languageCode)}''';
                     : Localization.getCurrentText('dark_theme_tooltip', languageProvider.currentLanguageCode),
                   onPressed: () {
                     themeProvider.toggleTheme();
-                    print('Theme toggled: ${themeProvider.isDarkMode ? 'Dark' : 'Light'}');
+                    AppLogger.debug('Theme toggled: ${themeProvider.isDarkMode ? 'Dark' : 'Light'}');
                   },
                   splashRadius: 24,
                   constraints: const BoxConstraints(),
@@ -403,7 +404,7 @@ ${Localization.getCurrentText('email_thanks', languageCode)}''';
       ),
       child: provider.isLoading && provider.menus.isEmpty && provider.allMenus.isEmpty
           ? const ShimmerLoading()
-          : provider.error != null
+          : provider.error != null && provider.menus.isEmpty && provider.allMenus.isEmpty
               ? AppErrorWidget(
                   error: provider.error!,
                   onRetry: () {
