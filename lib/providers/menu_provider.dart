@@ -8,6 +8,7 @@ import 'package:yurttaye_mobile/models/menu.dart';
 import 'package:yurttaye_mobile/services/api_service.dart';
 import 'package:yurttaye_mobile/services/notification_service.dart';
 import 'package:yurttaye_mobile/utils/app_config.dart';
+import 'package:yurttaye_mobile/utils/app_logger.dart';
 
 class MenuProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -44,11 +45,11 @@ class MenuProvider with ChangeNotifier {
       try {
         final List<dynamic> json = jsonDecode(cachedCities);
         _cities = await compute(_parseCities, json);
-        print('Cities loaded from cache: ${_cities.map((c) => {'id': c.id, 'name': c.name}).toList()}');
+        AppLogger.info('Cities loaded from cache: ${_cities.length} items');
         notifyListeners();
         return;
       } catch (e) {
-        print('Error parsing cached cities: $e');
+        AppLogger.error('Error parsing cached cities', e);
       }
     }
 
@@ -57,11 +58,11 @@ class MenuProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
       _cities = await _apiService.getCities().timeout(const Duration(seconds: 10));
-      print('Cities fetched: ${_cities.map((c) => {'id': c.id, 'name': c.name}).toList()}');
+      AppLogger.info('Cities fetched: ${_cities.length} items');
       await prefs.setString('cities', jsonEncode(_cities.map((c) => c.toJson()).toList()));
     } catch (e) {
       _error = e.toString();
-      print('Error fetching cities: $e');
+      AppLogger.error('Error fetching cities', e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -71,7 +72,7 @@ class MenuProvider with ChangeNotifier {
   Future<void> fetchMenus({bool reset = false, bool initialLoad = false}) async {
     // Prevent multiple simultaneous calls
     if (_isLoading) {
-      print('Fetch already in progress, skipping...');
+      AppLogger.debug('Fetch already in progress, skipping...');
       return;
     }
 
@@ -88,12 +89,12 @@ class MenuProvider with ChangeNotifier {
       try {
         final List<dynamic> json = jsonDecode(prefs.getString('menus')!);
         _menus = await compute(_parseMenus, json);
-        _allMenus = List.from(_menus); // Copy to allMenus for initial display
-        print('Menus loaded from cache: ${_menus.length} items');
+        _allMenus = List.from(_menus);
+        AppLogger.info('Menus loaded from cache: ${_menus.length} items');
         notifyListeners();
         return;
       } catch (e) {
-        print('Error parsing cached menus: $e');
+        AppLogger.error('Error parsing cached menus', e);
       }
     }
 
@@ -106,7 +107,7 @@ class MenuProvider with ChangeNotifier {
 
       // Fetch all menus for HomeScreen (unfiltered)
       final allMenus = await _apiService.getMenus().timeout(const Duration(seconds: 10));
-      print('All menus fetched: ${allMenus.length} items');
+      AppLogger.info('All menus fetched: ${allMenus.length} items');
       
       // Remove duplicates based on menu ID
       final uniqueMenus = <Menu>[];
@@ -119,7 +120,7 @@ class MenuProvider with ChangeNotifier {
         }
       }
       
-      print('Unique menus after deduplication: ${uniqueMenus.length} items');
+      AppLogger.debug('Unique menus after deduplication: ${uniqueMenus.length} items');
       
       if (reset || initialLoad) {
         _allMenus = uniqueMenus;
@@ -149,15 +150,15 @@ class MenuProvider with ChangeNotifier {
 
       // Cache menus
       await prefs.setString('menus', jsonEncode(_allMenus.map((m) => m.toJson()).toList()));
-      print('Menus cached: ${_allMenus.length} items');
+      AppLogger.info('Menus cached: ${_allMenus.length} items');
 
-      // Plan bildirimler için bugünün menüsünü bul
+      // Schedule notifications for today
       await _scheduleNotificationsForToday();
 
     } catch (e) {
       _error = e.toString();
       _hasMore = false;
-      print('Error fetching menus: $e');
+      AppLogger.error('Error fetching menus', e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -169,49 +170,45 @@ class MenuProvider with ChangeNotifier {
       final notificationsEnabled = await _notificationService.areNotificationsEnabled();
       if (notificationsEnabled && _allMenus.isNotEmpty) {
         await _notificationService.scheduleDailyMealNotifications(_allMenus);
-        print('Günlük yemek bildirimleri planlandı');
+        AppLogger.notification('Daily meal notifications scheduled');
       }
     } catch (e) {
-      print('Bildirim planlama hatası: $e');
+      AppLogger.error('Notification scheduling error', e);
     }
   }
 
   void setSelectedCity(int? cityId) {
     _selectedCityId = cityId;
-    print('Setting cityId: $cityId');
-    // Yeni şehir verileri için şehirleri de yenile
-    fetchCities();
+    AppLogger.debug('Setting cityId: $cityId');
     fetchMenus(reset: true);
   }
 
   void setSelectedMealType(String? mealType) {
     if (mealType != null && !AppConfig.mealTypes.contains(mealType)) {
-      print('Invalid mealType: $mealType');
+      AppLogger.warning('Invalid mealType: $mealType');
       return;
     }
     _selectedMealType = mealType;
-    print('Setting mealType: $mealType');
+    AppLogger.debug('Setting mealType: $mealType');
     fetchMenus(reset: true);
   }
 
   void setSelectedDate(String? date) {
     _selectedDate = date;
-    print('Setting date: $date');
+    AppLogger.debug('Setting date: $date');
     fetchMenus(reset: true);
   }
 
   void setSelectedMealIndex(int index) {
     _selectedMealIndex = index;
-    print('Setting meal index: $index');
+    AppLogger.debug('Setting meal index: $index');
   }
 
   void clearFilters() {
     _selectedCityId = null;
     _selectedMealType = null;
     _selectedDate = null;
-    print('Clearing filters');
-    // Filtreleri temizlerken şehirleri de yenile
-    fetchCities();
+    AppLogger.debug('Clearing filters');
     fetchMenus(reset: true);
   }
 
@@ -222,7 +219,7 @@ class MenuProvider with ChangeNotifier {
     return _allMenus
         .where((menu) =>
             menu.date.isAfter(todayOnly) && 
-            menu.mealType == AppConfig.mealTypes[_selectedMealIndex ?? 0])
+            menu.mealType == AppConfig.mealTypes[_selectedMealIndex])
         .take(3)
         .toList();
   }

@@ -4,17 +4,18 @@ import 'package:http/http.dart' as http;
 import 'package:yurttaye_mobile/models/city.dart';
 import 'package:yurttaye_mobile/models/menu.dart';
 import 'package:yurttaye_mobile/utils/constants.dart';
+import 'package:yurttaye_mobile/utils/app_logger.dart';
 
 class ApiService {
   // Fetch cities from the API
   Future<List<City>> getCities() async {
     final uri = Uri.parse('${Constants.apiUrl}/City');
-    print('Fetching cities from: $uri');
+    AppLogger.api('Fetching cities from: $uri');
     final response = await http.get(
       uri,
       headers: {'x-api-key': Constants.apiKey},
     );
-    print('Cities response: status=${response.statusCode}, body=${response.body}');
+    AppLogger.api('Cities response: status=${response.statusCode}');
     if (response.statusCode == 200) {
       final List<dynamic> json = jsonDecode(response.body);
       return await compute(_parseCities, json);
@@ -39,12 +40,12 @@ class ApiService {
     if (pageSize != null) queryParams['pageSize'] = pageSize.toString();
 
     final uri = Uri.parse('${Constants.apiUrl}/Menu').replace(queryParameters: queryParams);
-    print('Fetching menus from: $uri');
+    AppLogger.api('Fetching menus from: $uri');
     final response = await http.get(
       uri,
       headers: {'x-api-key': Constants.apiKey},
     );
-    print('Menus response: status=${response.statusCode}, body=${response.body}');
+    AppLogger.api('Menus response: status=${response.statusCode}');
 
     if (response.statusCode == 200) {
       final List<dynamic> json = jsonDecode(response.body);

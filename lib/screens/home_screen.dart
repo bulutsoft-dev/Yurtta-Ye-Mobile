@@ -493,7 +493,27 @@ ${Localization.getCurrentText('email_thanks', languageCode)}''';
     final menu = provider.menus.firstWhere(
       (menu) =>
           AppConfig.apiDateFormat.format(menu.date) == selectedDate && menu.mealType == selectedMealType,
+      orElse: () => Menu(
+        id: 0,
+        cityId: 0,
+        mealType: selectedMealType,
+        date: _selectedDate,
+        energy: '',
+        items: [],
+      ),
     );
+
+    // Return empty state if menu not found
+    if (menu.id == 0) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: Constants.space4,
+          vertical: Constants.space2,
+        ),
+        child: const SizedBox.shrink(),
+      );
+    }
 
     return Container(
       width: double.infinity,

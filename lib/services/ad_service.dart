@@ -1,8 +1,8 @@
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:yurttaye_mobile/utils/app_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:yurttaye_mobile/utils/app_logger.dart';
 
 class AdService {
   static String get interstitialAdUnitId {
@@ -25,24 +25,23 @@ class AdService {
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _interstitialAd = ad;
-          print('Geçiş reklamı yüklendi');
+          AppLogger.ad('Interstitial ad loaded');
           
           _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (ad) {
               ad.dispose();
               _interstitialAd = null;
-              // Yeni reklam yükle
               loadInterstitialAd();
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
-              print('Geçiş reklamı gösterilemedi: $error');
+              AppLogger.ad('Interstitial ad failed to show: $error');
               ad.dispose();
               _interstitialAd = null;
             },
           );
         },
         onAdFailedToLoad: (error) {
-          print('Geçiş reklamı yüklenemedi: $error');
+          AppLogger.ad('Interstitial ad failed to load: $error');
           _interstitialAd = null;
         },
       ),
@@ -65,26 +64,21 @@ class AdService {
 
   static Future<void> showInterstitialAd() async {
     if (await isAdFreeActive()) {
-      print('Ad-free active, interstitial ad not shown.');
+      AppLogger.ad('Ad-free active, interstitial ad not shown');
       return;
     }
     if (await isInterstitialBlocked()) {
-      print('Interstitial ad block active, not showing interstitial ad.');
+      AppLogger.ad('Interstitial ad blocked, not showing');
       return;
     }
-    print('=== AD SERVICE DEBUG ===');
-    print('Interstitial ad is null: ${_interstitialAd == null}');
-    print('Ad unit ID: $interstitialAdUnitId');
     
     if (_interstitialAd != null) {
-      print('Showing existing interstitial ad...');
+      AppLogger.ad('Showing interstitial ad');
       await _interstitialAd!.show();
     } else {
-      print('Geçiş reklamı henüz yüklenmedi, yükleniyor...');
-      // Reklam yüklenmemişse yeni bir tane yükle
+      AppLogger.ad('Interstitial ad not loaded, loading now...');
       await loadInterstitialAd();
     }
-    print('=======================');
   }
 
   static void dispose() {
@@ -98,10 +92,10 @@ class AdService {
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
           _rewardedAd = ad;
-          print('Rewarded reklam yüklendi');
+          AppLogger.ad('Rewarded ad loaded');
         },
         onAdFailedToLoad: (error) {
-          print('Rewarded reklam yüklenemedi: $error');
+          AppLogger.ad('Rewarded ad failed to load: $error');
           _rewardedAd = null;
         },
       ),
@@ -110,7 +104,7 @@ class AdService {
 
   static Future<void> showRewardedAd({required VoidCallback onRewarded, VoidCallback? onClosed}) async {
     if (_rewardedAd == null) {
-      print('Rewarded reklam henüz yüklenmedi, yükleniyor...');
+      AppLogger.ad('Rewarded ad not loaded, loading now...');
       await loadRewardedAd();
     }
     if (_rewardedAd != null) {
@@ -122,7 +116,7 @@ class AdService {
           if (onClosed != null) onClosed();
         },
         onAdFailedToShowFullScreenContent: (ad, error) {
-          print('Rewarded reklam gösterilemedi: $error');
+          AppLogger.ad('Rewarded ad failed to show: $error');
           ad.dispose();
           _rewardedAd = null;
           if (onClosed != null) onClosed();
@@ -130,13 +124,13 @@ class AdService {
       );
       await _rewardedAd!.show(
         onUserEarnedReward: (ad, reward) {
-          print('Kullanıcı ödül kazandı: ${reward.amount} ${reward.type}');
+          AppLogger.ad('User earned reward: ${reward.amount} ${reward.type}');
           onRewarded();
         },
       );
     } else {
-      print('Rewarded reklam yüklenemedi.');
+      AppLogger.ad('Rewarded ad could not be loaded');
       if (onClosed != null) onClosed();
     }
   }
-} 
+}

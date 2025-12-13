@@ -4,6 +4,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/menu.dart';
 import '../utils/localization.dart';
+import '../utils/app_logger.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -29,32 +30,30 @@ class NotificationService {
 
   Future<void> scheduleDailyMealNotifications(List<Menu> menus) async {
     if (menus.isEmpty) {
-      print('Menü listesi boş, bildirim planlanamıyor');
+      AppLogger.notification('Menu list empty, cannot schedule notifications');
       return;
     }
 
-    // Bildirimleri temizle
+    // Clear existing notifications
     await notifications.cancelAll();
 
-    // Bugünün tarihini al
+    // Get today's date
     final today = DateTime.now();
     final todayString = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
-    // Bugünün menülerini filtrele
+    // Filter today's menus
     var todayMenus = menus.where((menu) {
       final menuDate = '${menu.date.year}-${menu.date.month.toString().padLeft(2, '0')}-${menu.date.day.toString().padLeft(2, '0')}';
       return menuDate == todayString;
     }).toList();
 
-    // Eğer bugünün menüsü yoksa, en yakın tarihteki menüyü kullan
+    // If no menu for today, find nearest date
     if (todayMenus.isEmpty) {
-      print('Bugünün menüsü bulunamadı, en yakın tarihteki menü aranıyor...');
+      AppLogger.notification('No menu for today, searching for nearest date...');
       
-      // Gelecek tarihlerdeki menüleri bul
       final futureMenus = menus.where((menu) => menu.date.isAfter(today)).toList();
       
       if (futureMenus.isNotEmpty) {
-        // En yakın tarihteki menüleri al
         final nearestDate = futureMenus.map((m) => m.date).reduce((a, b) => a.isBefore(b) ? a : b);
         todayMenus = futureMenus.where((menu) => 
           menu.date.year == nearestDate.year && 
@@ -62,9 +61,8 @@ class NotificationService {
           menu.date.day == nearestDate.day
         ).toList();
         
-        print('En yakın tarihteki menü bulundu: ${nearestDate.toString().split(' ')[0]}');
+        AppLogger.notification('Found nearest menu date: ${nearestDate.toString().split(' ')[0]}');
       } else {
-        // Geçmiş tarihlerdeki menüleri kullan (test için)
         final pastMenus = menus.where((menu) => menu.date.isBefore(today)).toList();
         if (pastMenus.isNotEmpty) {
           final latestDate = pastMenus.map((m) => m.date).reduce((a, b) => a.isAfter(b) ? a : b);
@@ -73,17 +71,17 @@ class NotificationService {
             menu.date.month == latestDate.month && 
             menu.date.day == latestDate.day
           ).toList();
-          print('Test için geçmiş tarihteki menü kullanılıyor: ${latestDate.toString().split(' ')[0]}');
+          AppLogger.notification('Using past menu for test: ${latestDate.toString().split(' ')[0]}');
         }
       }
     }
 
     if (todayMenus.isEmpty) {
-      print('Hiç menü bulunamadı, bildirim planlanamıyor');
+      AppLogger.notification('No menu found, cannot schedule notifications');
       return;
     }
 
-    // Kahvaltı menüsünü bul
+    // Find breakfast menu
     final breakfastMenu = todayMenus.firstWhere(
       (menu) => menu.mealType == 'Kahvaltı',
       orElse: () => Menu(
@@ -96,7 +94,7 @@ class NotificationService {
       ),
     );
 
-    // Akşam yemeği menüsünü bul
+    // Find dinner menu
     final dinnerMenu = todayMenus.firstWhere(
       (menu) => menu.mealType == 'Akşam Yemeği',
       orElse: () => Menu(
@@ -109,40 +107,40 @@ class NotificationService {
       ),
     );
 
-    print('Kahvaltı menüsü bulundu: ${breakfastMenu.items.length} yemek');
-    print('Akşam yemeği menüsü bulundu: ${dinnerMenu.items.length} yemek');
+    AppLogger.notification('Breakfast menu found: ${breakfastMenu.items.length} items');
+    AppLogger.notification('Dinner menu found: ${dinnerMenu.items.length} items');
 
-    // Kahvaltı bildirimleri
+    // Breakfast notifications
     await _scheduleNotification(
       id: 1,
       title: 'Kahvaltı Başladı! 🍳',
       body: 'Bugünün kahvaltı menüsü:\n${_getMenuSummary(breakfastMenu)}',
-      scheduledTime: _getTodayAt(7, 0), // 07:00
+      scheduledTime: _getTodayAt(7, 0),
     );
 
     await _scheduleNotification(
       id: 2,
       title: 'Kahvaltı Bitmek Üzere! ⏰',
       body: 'Kahvaltı menüsü:\n${_getMenuSummary(breakfastMenu)}\n\nHemen yemekhaneye gidin!',
-      scheduledTime: _getTodayAt(11, 15), // 11:15
+      scheduledTime: _getTodayAt(11, 15),
     );
 
-    // Akşam yemeği bildirimleri
+    // Dinner notifications
     await _scheduleNotification(
       id: 3,
       title: 'Akşam Yemeği Başladı! 🍽️',
       body: 'Bugünün akşam yemeği menüsü:\n${_getMenuSummary(dinnerMenu)}',
-      scheduledTime: _getTodayAt(16, 00), // 19:16
+      scheduledTime: _getTodayAt(16, 00),
     );
 
     await _scheduleNotification(
       id: 4,
       title: 'Akşam Yemeği Bitmek Üzere! ⏰',
       body: 'Akşam yemeği menüsü:\n${_getMenuSummary(dinnerMenu)}\n\nHemen yemekhaneye gidin!',
-      scheduledTime: _getTodayAt(22, 15), // 22:15
+      scheduledTime: _getTodayAt(22, 15),
     );
 
-    print('Günlük yemek bildirimleri planlandı');
+    AppLogger.notification('Daily meal notifications scheduled');
   }
 
   Future<void> _scheduleNotification({
@@ -151,7 +149,6 @@ class NotificationService {
     required String body,
     required DateTime scheduledTime,
   }) async {
-    // Eğer zaman geçmişse, yarın için planla
     DateTime targetTime = scheduledTime;
     if (targetTime.isBefore(DateTime.now())) {
       targetTime = targetTime.add(const Duration(days: 1));
@@ -186,12 +183,11 @@ class NotificationService {
             UILocalNotificationDateInterpretation.absoluteTime,
       );
       
-      print('Bildirim planlandı: $title - ${targetTime.toString()}');
+      AppLogger.notification('Notification scheduled: $title - ${targetTime.toString()}');
     } catch (e) {
-      print('Bildirim planlanırken hata: $e');
-      // Eğer exact alarm izni yoksa, inexact mode kullan
+      AppLogger.error('Error scheduling notification', e);
       if (e.toString().contains('exact_alarms_not_permitted')) {
-        print('Exact alarm izni yok, inexact mode kullanılıyor...');
+        AppLogger.notification('No exact alarm permission, using inexact mode...');
         try {
           await notifications.zonedSchedule(
             id,
@@ -220,9 +216,9 @@ class NotificationService {
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
           );
-          print('Inexact bildirim planlandı: $title');
+          AppLogger.notification('Inexact notification scheduled: $title');
         } catch (e2) {
-          print('Inexact bildirim de başarısız: $e2');
+          AppLogger.error('Inexact notification also failed', e2);
         }
       }
     }
@@ -236,7 +232,6 @@ class NotificationService {
   String _getMenuSummary(Menu menu) {
     if (menu.items.isEmpty) return 'Menü henüz açıklanmadı';
     
-    // Ana yemekleri al (ilk 5 tane)
     final mainItems = menu.items.take(5).map((item) => item.name).toList();
     
     if (mainItems.length <= 3) {
@@ -248,7 +243,7 @@ class NotificationService {
 
   Future<void> cancelAllNotifications() async {
     await notifications.cancelAll();
-    print('Tüm bildirimler iptal edildi');
+    AppLogger.notification('All notifications cancelled');
   }
 
   Future<bool> areNotificationsEnabled() async {
@@ -263,10 +258,9 @@ class NotificationService {
     if (!enabled) {
       await cancelAllNotifications();
     }
-    print('Bildirimler ${enabled ? 'açıldı' : 'kapatıldı'}');
+    AppLogger.notification('Notifications ${enabled ? 'enabled' : 'disabled'}');
   }
 
-  // Test bildirimi gönder
   Future<void> sendTestNotification() async {
     await notifications.show(
       999,
@@ -286,21 +280,19 @@ class NotificationService {
     );
   }
 
-  // Aktif bildirimleri getir
   Future<List<PendingNotificationRequest>> getPendingNotifications() async {
     try {
       final pendingNotifications = await notifications.pendingNotificationRequests();
-      print('Aktif bildirim sayısı: ${pendingNotifications.length}');
+      AppLogger.notification('Pending notifications count: ${pendingNotifications.length}');
       return pendingNotifications;
     } catch (e) {
-      print('Bildirimler getirilirken hata: $e');
+      AppLogger.error('Error getting pending notifications', e);
       return [];
     }
   }
 
-  // Bildirimleri yeniden planla
   Future<void> rescheduleNotifications(List<Menu> menus) async {
     await cancelAllNotifications();
     await scheduleDailyMealNotifications(menus);
   }
-} 
+}
