@@ -1,47 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:yurttaye_mobile/services/notification_service.dart';
-import 'package:yurttaye_mobile/models/menu.dart';
-import 'package:yurttaye_mobile/models/menu_item.dart';
+import 'package:yurttaye_mobile/utils/app_logger.dart';
 
+/// Bildirim test yardımcı sınıfı
 class NotificationTest {
   static final NotificationService _notificationService = NotificationService();
 
+  /// Anlık test bildirimi gönder
   static Future<void> testImmediateNotification() async {
     try {
-      // Hemen gönderilecek test bildirimi
-      await _notificationService.notifications.show(
-        999,
-        'Test Bildirimi',
-        'Bu bir test bildirimidir!',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'test_notifications',
-            'Test Bildirimleri',
-            channelDescription: 'Test bildirimleri',
-            importance: Importance.high,
-            priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
-          ),
-        ),
-      );
-      print('Anlık test bildirimi gönderildi!');
+      await _notificationService.sendTestNotification();
+      AppLogger.notification('Anlık test bildirimi gönderildi!');
     } catch (e) {
-      print('Anlık test bildirimi hatası: $e');
+      AppLogger.error('Anlık test bildirimi hatası', e);
       rethrow;
     }
   }
 
+  /// Tüm bildirimleri iptal et
   static Future<void> cancelAllNotifications() async {
     try {
       await _notificationService.cancelAllNotifications();
-      print('Tüm bildirimler iptal edildi!');
+      AppLogger.notification('Tüm bildirimler iptal edildi!');
     } catch (e) {
-      print('Bildirim iptal hatası: $e');
+      AppLogger.error('Bildirim iptal hatası', e);
       rethrow;
     }
   }
 
+  /// Test dialog'u göster
   static Future<void> showTestDialog(BuildContext context) async {
     return showDialog(
       context: context,
@@ -91,4 +78,4 @@ class NotificationTest {
       ),
     );
   }
-} 
+}
