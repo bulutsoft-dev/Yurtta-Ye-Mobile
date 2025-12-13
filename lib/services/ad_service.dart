@@ -133,4 +133,100 @@ class AdService {
       if (onClosed != null) onClosed();
     }
   }
+
+  // =========== APP OPEN AD ===========
+  static String get appOpenAdUnitId => AppConfig.appOpenAdUnitId;
+  static AppOpenAd? _appOpenAd;
+  static bool _isShowingAppOpenAd = false;
+
+  /// App Open reklamını yükle
+  static Future<void> loadAppOpenAd() async {
+    await AppOpenAd.load(
+      adUnitId: appOpenAdUnitId,
+      request: const AdRequest(),
+      adLoadCallback: AppOpenAdLoadCallback(
+        onAdLoaded: (ad) {
+          _appOpenAd = ad;
+          AppLogger.ad('App Open ad loaded');
+        },
+        onAdFailedToLoad: (error) {
+          AppLogger.ad('App Open ad failed to load: $error');
+          _appOpenAd = null;
+        },
+      ),
+    );
+  }
+
+  /// App Open reklam engellenmiş mi kontrolü
+  static Future<bool> isAppOpenBlocked() async {
+    final prefs = await SharedPreferences.getInstance();
+    final blockMillis = prefs.getInt('appOpenAdBlockUntil');
+    if (blockMillis == null) return false;
+    return DateTime.now().isBefore(DateTime.fromMillisecondsSinceEpoch(blockMillis));
+  }
+
+  /// App Open reklamını göster
+  static Future<void> showAppOpenAd({VoidCallback? onAdClosed}) async {
+    // Ad-free kontrolü
+    if (await isAdFreeActive()) {
+      AppLogger.ad('Ad-free active, App Open ad not shown');
+      onAdClosed?.call();
+      return;
+    }
+
+    // App Open bloklanmış mı kontrolü
+    if (await isAppOpenBlocked()) {
+      AppLogger.ad('App Open ad blocked by user, skipping');
+      onAdClosed?.call();
+      return;
+    }
+
+    // Zaten gösteriliyorsa atla
+    if (_isShowingAppOpenAd) {
+      AppLogger.ad('App Open ad already showing');
+      onAdClosed?.call();
+      return;
+    }
+
+    // Reklam yüklü değilse yükle ve bekle
+    if (_appOpenAd == null) {
+      AppLogger.ad('App Open ad not loaded, loading now...');
+      await loadAppOpenAd();
+      // Kısa bekle
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    if (_appOpenAd != null) {
+      _isShowingAppOpenAd = true;
+      
+      _appOpenAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdShowedFullScreenContent: (ad) {
+          AppLogger.ad('App Open ad showed');
+        },
+        onAdDismissedFullScreenContent: (ad) {
+          AppLogger.ad('App Open ad dismissed');
+          _isShowingAppOpenAd = false;
+          ad.dispose();
+          _appOpenAd = null;
+          loadAppOpenAd(); // Bir sonraki için yükle
+          onAdClosed?.call();
+        },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          AppLogger.ad('App Open ad failed to show: $error');
+          _isShowingAppOpenAd = false;
+          ad.dispose();
+          _appOpenAd = null;
+          onAdClosed?.call();
+        },
+      );
+      
+      await _appOpenAd!.show();
+    } else {
+      AppLogger.ad('App Open ad could not be loaded, skipping');
+      onAdClosed?.call();
+    }
+  }
+
+  /// App Open reklamı yüklü mü?
+  static bool get isAppOpenAdLoaded => _appOpenAd != null;
 }

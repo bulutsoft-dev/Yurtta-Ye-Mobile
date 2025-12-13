@@ -77,4 +77,13 @@ class AppConfig {
       return dotenv.env['REWARDED_AD_UNIT_ID'] ?? 'ca-app-pub-9589008379442992/6298796913';
     }
   }
+
+  // App Open reklam birimi kimliği (Uygulama açılışı)
+  static String get appOpenAdUnitId {
+    if (isDebug) {
+      return dotenv.env['TEST_APP_OPEN_AD_UNIT_ID'] ?? 'ca-app-pub-3940256099942544/9257395921';
+    } else {
+      return dotenv.env['APP_OPEN_AD_UNIT_ID'] ?? 'ca-app-pub-9589008379442992/6376210156';
+    }
+  }
 } 

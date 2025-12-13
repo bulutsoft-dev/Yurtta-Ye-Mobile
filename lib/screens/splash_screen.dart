@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:yurttaye_mobile/utils/constants.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:yurttaye_mobile/utils/localization.dart';
+import 'package:yurttaye_mobile/services/ad_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -87,6 +88,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       curve: Curves.easeInOut,
     ));
 
+    // App Open reklamını önceden yükle
+    AdService.loadAppOpenAd();
+
     // Animasyonları başlat
     _startAnimations();
   }
@@ -101,10 +105,23 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     // Progress animasyonunu başlat
     _progressController.forward();
     
-    // 2 saniye bekle ve ana sayfaya git
+    // 2 saniye bekle
     await Future.delayed(const Duration(seconds: 2));
+    
     if (mounted) {
-      context.goNamed('home');
+      // App Open reklamını göster, kapanınca home'a git
+      await AdService.showAppOpenAd(
+        onAdClosed: () {
+          if (mounted) {
+            context.goNamed('home');
+          }
+        },
+      );
+      
+      // Reklam gösterilemezse de home'a git (fallback)
+      if (mounted && !AdService.isAppOpenAdLoaded) {
+        context.goNamed('home');
+      }
     }
   }
 
