@@ -11,6 +11,7 @@ import 'package:yurttaye_mobile/utils/localization.dart';
 import 'package:yurttaye_mobile/providers/language_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:yurttaye_mobile/services/share_service.dart';
+import 'package:screenshot/screenshot.dart';
 
 /// Kompakt ve toplu yemek kartı
 class MealCard extends StatefulWidget {
@@ -33,6 +34,7 @@ class _MealCardState extends State<MealCard> with SingleTickerProviderStateMixin
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   bool _isHovered = false;
+  final ScreenshotController _screenshotController = ScreenshotController();
 
   @override
   void initState() {
@@ -250,11 +252,14 @@ class _MealCardState extends State<MealCard> with SingleTickerProviderStateMixin
                 onTapUp: (_) => _controller.reverse(),
                 onTapCancel: () => _controller.reverse(),
                 splashColor: AppTheme.getMealTypePrimaryColor(mealTypeConstant).withOpacity(0.1),
-                child: Column(
-                  children: [
-                    _buildCompactHeader(categories, mealTypeConstant),
-                    _buildCompactContent(categories, mealTypeConstant),
-                  ],
+                child: Screenshot(
+                  controller: _screenshotController,
+                  child: Column(
+                    children: [
+                      _buildCompactHeader(categories, mealTypeConstant),
+                      _buildCompactContent(categories, mealTypeConstant),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -355,7 +360,12 @@ class _MealCardState extends State<MealCard> with SingleTickerProviderStateMixin
             child: InkWell(
               onTap: () {
                 HapticFeedback.lightImpact();
-                ShareService.shareMenuAsText(widget.menu, languageCode: languageCode);
+                ShareService.showShareOptions(
+                  context: context,
+                  menu: widget.menu,
+                  languageCode: languageCode,
+                  screenshotController: _screenshotController,
+                );
               },
               borderRadius: BorderRadius.circular(8),
               child: Container(
