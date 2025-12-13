@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:screenshot/screenshot.dart';
 import 'package:yurttaye_mobile/models/menu.dart';
 import 'package:yurttaye_mobile/models/menu_item.dart';
 import 'package:yurttaye_mobile/providers/menu_provider.dart';
 import 'package:yurttaye_mobile/providers/theme_provider.dart';
+import 'package:yurttaye_mobile/services/share_service.dart';
 import 'package:yurttaye_mobile/themes/app_theme.dart';
 import 'package:yurttaye_mobile/utils/app_config.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +27,8 @@ class MenuDetailScreen extends StatefulWidget {
 
 class _MenuDetailScreenState extends State<MenuDetailScreen> {
   String _selectedMealType = AppConfig.mealTypes[0];
+  final ScreenshotController _screenshotController = ScreenshotController();
+  Menu? _currentMenu;
 
   /// Yemek türü sabitini al
   String _getMealTypeConstant(String mealType) {
@@ -84,21 +88,46 @@ class _MenuDetailScreenState extends State<MenuDetailScreen> {
     final mealTypeConstant = _getMealTypeConstant(filteredMenu.id != 0 ? filteredMenu.mealType : menu.mealType);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Share için güncel menüyü sakla
+    _currentMenu = filteredMenu.id != 0 ? filteredMenu : menu;
+
     return Scaffold(
       backgroundColor: isDark ? Constants.kykGray900 : Constants.kykGray50,
       appBar: _buildAppBar(themeProvider, mealTypeConstant, languageCode),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildHeroHeader(filteredMenu.id != 0 ? filteredMenu : menu, mealTypeConstant),
+            // Screenshot için sarmalanan menü içeriği
+            Screenshot(
+              controller: _screenshotController,
+              child: Container(
+                color: isDark ? Constants.kykGray900 : Constants.kykGray50,
+                child: Column(
+                  children: [
+                    _buildHeroHeader(filteredMenu.id != 0 ? filteredMenu : menu, mealTypeConstant),
+                    const SizedBox(height: Constants.space3),
+                    filteredMenu.id != 0
+                        ? _buildMenuContent(filteredMenu, mealTypeConstant)
+                        : _buildNoMenuForMealType(mealTypeConstant),
+                    const SizedBox(height: Constants.space3),
+                    _buildNutritionSection(filteredMenu.id != 0 ? filteredMenu : menu, mealTypeConstant),
+                    // YurttaYe watermark
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        '📱 YurttaYe - yurttaye.onrender.com',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Constants.kykGray400 : Constants.kykGray500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: Constants.space3),
             _buildMealTypeSelector(mealTypeConstant),
-            const SizedBox(height: Constants.space3),
-            filteredMenu.id != 0
-                ? _buildMenuContent(filteredMenu, mealTypeConstant)
-                : _buildNoMenuForMealType(mealTypeConstant),
-            const SizedBox(height: Constants.space3),
-            _buildNutritionSection(filteredMenu.id != 0 ? filteredMenu : menu, mealTypeConstant),
             const SizedBox(height: Constants.space3),
             _buildMealHoursInfo(mealTypeConstant),
             const SizedBox(height: Constants.space3),
@@ -197,6 +226,18 @@ class _MenuDetailScreenState extends State<MenuDetailScreen> {
           onPressed: () => _shareMenu(),
         ),
       ],
+    );
+  }
+
+  void _shareMenu() {
+    if (_currentMenu == null || _currentMenu!.id == 0) return;
+    
+    final languageCode = Localizations.localeOf(context).languageCode;
+    ShareService.showShareOptions(
+      context: context,
+      menu: _currentMenu!,
+      screenshotController: _screenshotController,
+      languageCode: languageCode,
     );
   }
 
@@ -1096,24 +1137,6 @@ class _MenuDetailScreenState extends State<MenuDetailScreen> {
       default:
         return Icons.fastfood;
     }
-  }
-
-  void _shareMenu() {
-    final languageCode = Localizations.localeOf(context).languageCode;
-    // Menü paylaşma fonksiyonu
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          Localization.getText('share_menu', languageCode),
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: AppTheme.getMealTypePrimaryColor(_getMealTypeConstant(_selectedMealType)),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
   }
 
   Future<void> _launchEmail() async {
