@@ -10,6 +10,7 @@ import 'package:yurttaye_mobile/utils/constants.dart';
 import 'package:yurttaye_mobile/utils/localization.dart';
 import 'package:yurttaye_mobile/providers/language_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:yurttaye_mobile/services/share_service.dart';
 
 /// Kompakt ve toplu yemek kartı
 class MealCard extends StatefulWidget {
@@ -345,6 +346,30 @@ class _MealCardState extends State<MealCard> with SingleTickerProviderStateMixin
                   ),
                 ],
               ],
+            ),
+          ),
+          // Paylaş butonu
+          const SizedBox(width: Constants.space2),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                ShareService.shareMenuAsText(widget.menu, languageCode: languageCode);
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark ? Constants.black.withOpacity(0.5) : Constants.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.share_rounded,
+                  color: isDark ? Constants.white.withOpacity(0.9) : Constants.white,
+                  size: 20,
+                ),
+              ),
             ),
           ),
         ],
