@@ -150,12 +150,8 @@ class MenuProvider with ChangeNotifier {
       }
 
       // Filter menus based on current selection
-      final filteredMenus = _allMenus.where((menu) {
-        bool matchesCity = _selectedCityId == null || menu.cityId == _selectedCityId;
-        bool matchesMealType = _selectedMealType == null || menu.mealType == _selectedMealType;
-        bool matchesDate = _selectedDate == null || AppConfig.apiDateFormat.format(menu.date) == _selectedDate;
-        return matchesCity && matchesMealType && matchesDate;
-      }).toList();
+      _applyFilters();
+      final filteredMenus = _menus; // _menus is updated by _applyFilters
 
       if (reset || initialLoad) {
         _menus = filteredMenus;
@@ -195,9 +191,19 @@ class MenuProvider with ChangeNotifier {
     }
   }
 
+  void _applyFilters() {
+    _menus = _allMenus.where((menu) {
+      bool matchesCity = _selectedCityId == null || menu.cityId == _selectedCityId;
+      bool matchesMealType = _selectedMealType == null || menu.mealType == _selectedMealType;
+      bool matchesDate = _selectedDate == null || AppConfig.apiDateFormat.format(menu.date) == _selectedDate;
+      return matchesCity && matchesMealType && matchesDate;
+    }).toList();
+  }
+
   void setSelectedCity(int? cityId) {
     _selectedCityId = cityId;
     AppLogger.debug('Setting cityId: $cityId');
+    _applyFilters(); // Apply filters locally first
     fetchMenus(reset: true);
   }
 
@@ -208,12 +214,21 @@ class MenuProvider with ChangeNotifier {
     }
     _selectedMealType = mealType;
     AppLogger.debug('Setting mealType: $mealType');
+    _applyFilters();
     fetchMenus(reset: true);
   }
 
-  void setSelectedDate(String? date) {
+  // Updates the date filter without triggering an immediate API reset/fetch
+  // allowing the UI to decide when to fetch
+  void setDateFilter(String? date) {
     _selectedDate = date;
-    AppLogger.debug('Setting date: $date');
+    AppLogger.debug('Setting date filter: $date');
+    _applyFilters();
+    notifyListeners();
+  }
+
+  void setSelectedDate(String? date) {
+    setDateFilter(date);
     fetchMenus(reset: true);
   }
 
@@ -227,6 +242,7 @@ class MenuProvider with ChangeNotifier {
     _selectedMealType = null;
     _selectedDate = null;
     AppLogger.debug('Clearing filters');
+    _applyFilters();
     fetchMenus(reset: true);
   }
 

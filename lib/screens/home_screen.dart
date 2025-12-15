@@ -458,9 +458,15 @@ ${Localization.getCurrentText('email_thanks', languageCode)}''';
           _selectedDate = date;
         });
         final provider = Provider.of<MenuProvider>(context, listen: false);
-        if (!provider.menus.any((menu) =>
-            AppConfig.apiDateFormat.format(menu.date) ==
-            AppConfig.apiDateFormat.format(date))) {
+        final dateStr = AppConfig.apiDateFormat.format(date);
+        
+        // Sync date with provider without forcing a fetch yet
+        provider.setDateFilter(dateStr);
+        
+        // Check if we have data for this date after filter application
+        if (provider.menus.isEmpty) {
+          // If no data, fetch from API. 
+          // The provider's updated _selectedDate will ensure we fetch past data if needed.
           provider.fetchMenus(reset: false);
         }
       },
