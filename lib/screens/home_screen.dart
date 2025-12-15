@@ -71,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (mounted) {
         final provider = Provider.of<MenuProvider>(context, listen: false);
         provider.fetchCities();
+        // Fetch fresh data. initialLoad=true enables Stale-While-Revalidate
         provider.fetchMenus(reset: true, initialLoad: true);
         AppLogger.debug('Initiating fetchMenus from HomeScreen initState');
       }

@@ -84,7 +84,7 @@ class MenuProvider with ChangeNotifier {
       _hasMore = true;
     }
 
-    // Try loading cached menus for initial load
+    // Try loading cached menus for initial load (Stale-While-Revalidate)
     if (initialLoad && prefs.getString('menus') != null) {
       try {
         final List<dynamic> json = jsonDecode(prefs.getString('menus')!);
@@ -92,7 +92,7 @@ class MenuProvider with ChangeNotifier {
         _allMenus = List.from(_menus);
         AppLogger.info('Menus loaded from cache: ${_menus.length} items');
         notifyListeners();
-        return;
+        // Do NOT return here. Continue to fetch fresh data in background.
       } catch (e) {
         AppLogger.error('Error parsing cached menus', e);
       }
@@ -105,9 +105,10 @@ class MenuProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      // Fetch all menus for HomeScreen (unfiltered)
-      final allMenus = await _apiService.getMenus().timeout(const Duration(seconds: 30));
-      AppLogger.info('All menus fetched: ${allMenus.length} items');
+      // Fetch recent menus (from today onwards) to optimize performance
+      final String today = AppConfig.apiDateFormat.format(DateTime.now());
+      final allMenus = await _apiService.getMenus(date: today).timeout(const Duration(seconds: 30));
+      AppLogger.info('Fresh menus fetched from $today: ${allMenus.length} items');
       
       // Remove duplicates based on menu ID
       final uniqueMenus = <Menu>[];
