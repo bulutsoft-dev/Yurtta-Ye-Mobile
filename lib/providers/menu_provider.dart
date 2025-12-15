@@ -105,10 +105,27 @@ class MenuProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      // Fetch recent menus (from today onwards) to optimize performance
-      final String today = AppConfig.apiDateFormat.format(DateTime.now());
-      final allMenus = await _apiService.getMenus(date: today).timeout(const Duration(seconds: 30));
-      AppLogger.info('Fresh menus fetched from $today: ${allMenus.length} items');
+      // Determine start date for fetching
+      // If a date is selected and it's before today, fetch from that date
+      // Otherwise fetch from today onwards
+      DateTime fetchDate = DateTime.now();
+      if (_selectedDate != null) {
+        try {
+          final selected = AppConfig.apiDateFormat.parse(_selectedDate!);
+          // Compare dates (ignoring time)
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          if (selected.isBefore(today)) {
+            fetchDate = selected;
+          }
+        } catch (e) {
+          AppLogger.error('Error parsing selected date for fetch', e);
+        }
+      }
+
+      final String dateParam = AppConfig.apiDateFormat.format(fetchDate);
+      final allMenus = await _apiService.getMenus(date: dateParam).timeout(const Duration(seconds: 30));
+      AppLogger.info('Fresh menus fetched from $dateParam: ${allMenus.length} items');
       
       // Remove duplicates based on menu ID
       final uniqueMenus = <Menu>[];
